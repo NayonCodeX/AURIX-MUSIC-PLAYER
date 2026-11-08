@@ -1,0 +1,105 @@
+name: AURIX Android APK Build
+
+# Builds the AURIX Music Player debug APK on every push to main,
+# on every PR, and on manual dispatch. The APK is uploaded as a
+# GitHub Actions artifact that you can download from the run page.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Cancel any superseded run on the same ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platforms;android-35
+            build-tools;35.0.0
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/variables.gradle') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Install npm dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Sync Capacitor (web → android)
+        run: npx cap sync android
+
+      - name: Verify Kotlin source files
+        run: |
+          test -f android/app/src/main/java/com/ncx/aurix/MainActivity.kt || (echo "MISSING MainActivity.kt" && exit 1)
+          test -f android/app/src/main/java/com/ncx/aurix/MusicService.kt || (echo "MISSING MusicService.kt" && exit 1)
+          test -f android/app/src/main/java/com/ncx/aurix/MusicPlugin.kt || (echo "MISSING MusicPlugin.kt" && exit 1)
+          echo "All Kotlin source files present."
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      - name: Build Debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK was produced
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK" || (echo "APK not found at $APK" && exit 1)
+          SIZE=$(stat -c%s "$APK")
+          echo "APK built: $APK ($SIZE bytes)"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURIX-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload build reports (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURIX-build-reports
+          path: |
+            android/app/build/reports/
+            android/build/reports/
+          retention-days: 7
+          if-no-files-found: ignore

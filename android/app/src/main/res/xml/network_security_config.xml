@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- AURIX is an offline music player: no remote endpoints are loaded. -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <!-- Capacitor loads the bundled WebView assets via https://aurix.ncx.local
+         which is served internally by the WebView, so no domain exceptions. -->
+</network-security-config>

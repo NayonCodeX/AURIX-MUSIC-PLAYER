@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AURIX brand palette -->
+    <color name="colorPrimary">#a78bfa</color>
+    <color name="colorPrimaryDark">#070713</color>
+    <color name="colorAccent">#38bdf8</color>
+    <color name="colorBackground">#070713</color>
+    <color name="colorSurface">#0b0b22</color>
+
+    <color name="aurix_purple">#a78bfa</color>
+    <color name="aurix_blue">#38bdf8</color>
+    <color name="aurix_bg">#070713</color>
+</resources>

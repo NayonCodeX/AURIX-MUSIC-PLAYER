@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <!-- AURIX mark: hexagon with a play triangle inside, brand gradient -->
+    <path
+        android:fillColor="#1a1a3a"
+        android:strokeColor="#a78bfa"
+        android:strokeWidth="3"
+        android:pathData="M60,12 L102,36 V84 L60,108 L18,84 V36 Z" />
+    <path
+        android:fillColor="#a78bfa"
+        android:pathData="M48,42 L78,60 L48,78 Z" />
+</vector>

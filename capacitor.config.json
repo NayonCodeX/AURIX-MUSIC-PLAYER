@@ -1,0 +1,22 @@
+{
+  "appId": "com.ncx.aurix",
+  "appName": "AURIX Music Player",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "hostname": "aurix.ncx.local"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#070713",
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 800,
+      "backgroundColor": "#070713",
+      "showSpinner": false
+    }
+  }
+}
