@@ -47,6 +47,10 @@ npm-debug.log*
 *.ap_
 *.dex
 
+# …but allow release APKs in releases/ (committed deliverables)
+!releases/*.apk
+!releases/*.aab
+
 # Keystore (never commit signing keys)
 *.keystore
 *.jks
