@@ -91,7 +91,26 @@
     Storage,
     toast,
     haptic,
-    platform: isNative ? "android" : "web"
+    platform: isNative ? "android" : "web",
+    // Convert a file:// or content:// URI to a URL the WebView can load.
+    // On native, Capacitor rewrites these to https://localhost/_capacitor_file_/
+    // (for file://) or _capacitor_content_/ (for content://) so they pass
+    // the WebView's same-origin / mixed-content checks.
+    convertFileSrc: function (uri) {
+      if (!uri) return uri;
+      // Use the official Capacitor API if available
+      if (global.Capacitor && typeof global.Capacitor.convertFileSrc === "function") {
+        return global.Capacitor.convertFileSrc(uri);
+      }
+      // Fallback: rewrite file:// → http://localhost/_capacitor_file_/
+      if (typeof uri === "string" && uri.startsWith("file://")) {
+        return uri.replace(/^file:\/\//, "https://localhost/_capacitor_file_/").replace(/%20/g, " ");
+      }
+      if (typeof uri === "string" && uri.startsWith("content://")) {
+        return uri.replace(/^content:\/\//, "https://localhost/_capacitor_content_/").replace(/%20/g, " ");
+      }
+      return uri;
+    }
   };
 
   // Configure status bar if available

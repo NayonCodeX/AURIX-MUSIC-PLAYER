@@ -1,2 +1,2 @@
-6a021d86d57a226cf754d56d590b017e01479caeb862df484fa831b277ba56d3  releases/AURIX-v1.0.0-debug.apk
-c8b006f906b8061794a5cf6f34c24cf8  releases/AURIX-v1.0.0-debug.apk
+8461e15638438d533b822b6c8547782e823f44b724dbc68ab36136b29915bac3  releases/AURIX-v1.0.1-debug.apk
+164c894dc4d634da8ca12621aa8f898e  releases/AURIX-v1.0.1-debug.apk

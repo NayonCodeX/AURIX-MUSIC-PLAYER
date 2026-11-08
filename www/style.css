@@ -55,17 +55,26 @@
 html, body {
   margin: 0; padding: 0;
   height: 100%;
+  width: 100%;
   background: var(--bg-0);
   color: var(--text-1);
   font-family: var(--font);
-  font-size: 15px;
+  font-size: 16px;          /* bumped from 15px → better readability on phones */
   line-height: 1.4;
+  /* Body stays fixed; only .view scrolls internally */
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Prevent text size adjust on rotation */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Prevent rubber-banding on the whole page */
+  position: fixed;
+  inset: 0;
+  touch-action: none;       /* body itself never handles touch scroll */
 }
 body { background: radial-gradient(120% 80% at 50% 0%, #0d0d28 0%, var(--bg-0) 60%); }
 button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
@@ -73,6 +82,38 @@ input { font-family: inherit; }
 img { display: block; max-width: 100%; }
 svg { display: block; }
 .hidden { display: none !important; }
+
+/* ============================================================
+   Touch scrolling — critical for Android WebView
+   ============================================================ */
+/* Any element that needs to scroll gets this class via .view */
+.view,
+.scroll-y,
+.sheet-list,
+.eq-bands,
+.list-group {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;   /* momentum scrolling on iOS/Android WebView */
+  touch-action: pan-y;                 /* allow vertical pan */
+  overscroll-behavior: contain;       /* don't propagate to body */
+  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(167,139,250,0.22) transparent;
+}
+.view::-webkit-scrollbar,
+.scroll-y::-webkit-scrollbar,
+.sheet-list::-webkit-scrollbar,
+.eq-bands::-webkit-scrollbar,
+.list-group::-webkit-scrollbar { width: 4px; height: 4px; }
+.view::-webkit-scrollbar-thumb,
+.scroll-y::-webkit-scrollbar-thumb,
+.sheet-list::-webkit-scrollbar-thumb,
+.eq-bands::-webkit-scrollbar-thumb,
+.list-group::-webkit-scrollbar-thumb {
+  background: rgba(167,139,250,0.22);
+  border-radius: 4px;
+}
 
 /* ============================================================
    Boot Screen
@@ -139,13 +180,28 @@ svg { display: block; }
    App Shell
    ============================================================ */
 .app-shell {
-  position: fixed; inset: 0;
+  position: fixed;
+  inset: 0;
   display: grid;
-  grid-template-rows: var(--topbar-h) 1fr auto auto;
+  grid-template-rows: auto 1fr auto auto;
+  height: 100vh;
+  height: 100dvh;          /* dynamic viewport height — handles mobile URL bar */
+  width: 100vw;
+  width: 100dvw;
   background: var(--bg-0);
+  /* allow children to manage their own scrolling */
+  overflow: hidden;
 }
 .app-shell.has-mini {
-  grid-template-rows: var(--topbar-h) 1fr var(--mini-h) auto;
+  grid-template-rows: auto 1fr auto auto;
+}
+
+/* Make the view (1fr row) the actual scroll container */
+.app-shell > .view,
+.app-shell > main.view {
+  min-height: 0;          /* critical for grid + overflow to work */
+  height: 100%;
+  max-height: 100%;
 }
 
 /* ============================================================
@@ -190,8 +246,14 @@ svg { display: block; }
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  /* padding-bottom = bottom nav height + mini player height (if visible) + safe area */
   padding: 16px 16px calc(var(--botnav-h) + 24px + var(--safe-b));
   position: relative;
+}
+.app-shell.has-mini .view {
+  padding-bottom: calc(var(--botnav-h) + var(--mini-h) + 24px + var(--safe-b));
 }
 .main-view { padding-top: 8px; }
 
@@ -492,6 +554,10 @@ svg { display: block; }
   background: var(--bg-0);
   animation: npSlideUp 0.32s cubic-bezier(0.22,1,0.36,1) both;
   overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+  width: 100vw;
+  width: 100dvw;
 }
 .now-playing.closing { animation: npSlideDown 0.28s cubic-bezier(0.22,1,0.36,1) both; }
 @keyframes npSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -513,15 +579,16 @@ svg { display: block; }
   padding: 12px 14px;
   padding-top: calc(12px + var(--safe-t));
   position: relative; z-index: 2;
+  flex-shrink: 0;
 }
 .np-header-title { font-size: 12px; letter-spacing: 3px; color: var(--text-3); text-transform: uppercase; }
 .np-art-wrap {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  padding: 8px 32px; position: relative; z-index: 2;
-  min-height: 280px;
+  padding: 8px 24px; position: relative; z-index: 2;
+  min-height: 0;             /* allow shrink in flex */
 }
 .np-art {
-  width: 100%; max-width: 320px;
+  width: 100%; max-width: 280px;
   aspect-ratio: 1;
   border-radius: var(--radius-xl);
   background: var(--gradient-soft), var(--bg-3);
@@ -529,6 +596,8 @@ svg { display: block; }
   display: flex; align-items: center; justify-content: center;
   overflow: hidden; position: relative;
   animation: npArtIn 0.5s ease both;
+  /* Constrain to viewport height so the layout doesn't overflow on small screens */
+  max-height: calc(100dvh - 360px);
 }
 @keyframes npArtIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .np-art img { width: 100%; height: 100%; object-fit: cover; }
@@ -552,16 +621,17 @@ svg { display: block; }
 
 .np-info {
   text-align: center;
-  padding: 8px 32px 4px;
+  padding: 8px 24px 4px;
   position: relative; z-index: 2;
+  flex-shrink: 0;
 }
 .np-title {
-  font-size: 22px; font-weight: 700; color: var(--text-1);
+  font-size: 20px; font-weight: 700; color: var(--text-1);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   letter-spacing: -0.4px;
 }
 .np-artist {
-  font-size: 14px; color: var(--accent-purple);
+  font-size: 13px; color: var(--accent-purple);
   margin-top: 4px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -573,15 +643,17 @@ svg { display: block; }
 
 .np-actions {
   display: flex; justify-content: center; align-items: center; gap: 24px;
-  padding: 14px 24px 6px;
+  padding: 10px 24px 4px;
   position: relative; z-index: 2;
+  flex-shrink: 0;
 }
 .np-actions .icon-btn.active { color: var(--accent-pink); }
 
 .np-progress-wrap {
   display: flex; align-items: center; gap: 12px;
-  padding: 6px 24px 4px;
+  padding: 4px 24px 4px;
   position: relative; z-index: 2;
+  flex-shrink: 0;
 }
 .np-time { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; min-width: 36px; text-align: center; }
 .np-progress {
@@ -615,14 +687,15 @@ svg { display: block; }
 
 .np-controls {
   display: flex; justify-content: space-around; align-items: center;
-  padding: 8px 24px 16px;
-  padding-bottom: calc(16px + var(--safe-b));
+  padding: 6px 24px 12px;
+  padding-bottom: calc(12px + var(--safe-b));
   position: relative; z-index: 2;
+  flex-shrink: 0;
 }
 .np-controls .icon-btn { color: var(--text-2); }
 .np-controls .icon-btn.active { color: var(--accent-purple); }
 .np-controls .np-play {
-  width: 64px; height: 64px;
+  width: 60px; height: 60px;
   border-radius: 50%;
   background: var(--gradient-1);
   color: #0a0a18;

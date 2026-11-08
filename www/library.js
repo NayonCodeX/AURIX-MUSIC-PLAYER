@@ -75,24 +75,45 @@
   }
 
   function makeSong(opts) {
-    const { artist, title } = sanitizeFilename(opts.name);
-    const folderName = folderNameFromPath(opts.dirPath || opts.parentPath || "");
-    const album = opts.album || folderName;
+    // If the source is MediaStore (native scan), it already has rich metadata
+    // (title, artist, album, duration, displayName, relativePath, etc.).
+    // Otherwise (file picker fallback), parse from the filename.
+    let artist, title, album, folderName;
+    if (opts.title && opts.artist != null) {
+      // Native MediaStore result — trust its metadata
+      artist = opts.artist || "Unknown Artist";
+      title = opts.title || opts.name || "Unknown";
+      album = opts.album || (opts.folderName || "Unknown Album");
+      folderName = opts.folderName || folderNameFromPath(opts.relativePath || opts.dirPath || "");
+    } else {
+      const parsed = sanitizeFilename(opts.name);
+      artist = opts.artist || parsed.artist;
+      title = opts.title || parsed.title;
+      album = opts.album || (opts.folderName || folderNameFromPath(opts.dirPath || opts.relativePath || ""));
+      folderName = opts.folderName || folderNameFromPath(opts.dirPath || opts.relativePath || "");
+    }
+
     const id = opts.id || hashId(opts.uri || opts.path || opts.name);
     return {
       id,
-      title: title || opts.name,
+      title: title || opts.name || "Unknown",
       artist: artist || "Unknown Artist",
       album: album || "Unknown Album",
       duration: opts.duration || 0,
+      // URI must be a WebView-loadable URL. content:// and file:// URIs
+      // returned by native code go through `Capacitor.convertFileSrc()`
+      // to be converted to https://localhost/_capacitor_*_/... URLs that
+      // the WebView can stream.
       uri: opts.uri || null,
-      path: opts.path || opts.dirPath + "/" + opts.name,
-      dirPath: opts.dirPath || opts.parentPath || "",
+      path: opts.path || opts.relativePath || (opts.dirPath ? opts.dirPath + "/" + opts.name : ""),
+      dirPath: opts.dirPath || opts.relativePath || "",
       folderName,
-      name: opts.name,
+      name: opts.name || opts.displayName || title,
       size: opts.size || 0,
-      mtime: opts.mtime || 0,
-      addedAt: opts.addedAt || Date.now()
+      mtime: opts.mtime || opts.dateAdded || 0,
+      addedAt: opts.addedAt || Date.now(),
+      mimeType: opts.mimeType || null,
+      volumeName: opts.volumeName || null
     };
   }
 

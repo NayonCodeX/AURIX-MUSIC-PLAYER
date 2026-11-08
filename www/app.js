@@ -43,15 +43,35 @@
     const stats = Library.getStats();
 
     if (Cap.isNative) {
-      // Try to access media via Filesystem. On Android we need permission.
-      if (stats.songs === 0) {
-        // Show grant-permission CTA
+      // On native Android: if we already have songs, enter app and refresh
+      // in the background (in case the user added new music since last launch).
+      // If library is empty, prompt for permission first.
+      if (stats.songs > 0) {
+        enterApp();
+        // Background refresh — silently pick up any new music added since last run
+        // (only fires if we have a working native scanner)
+        if (Cap.Music && Cap.Music.scanAllAudio) {
+          // Check if we already have permission; only auto-scan if so
+          try {
+            const perm = await Cap.Music.hasAudioPermission();
+            if (perm && perm.granted) {
+              const added = await scanLibraryNative();
+              if (added > 0) {
+                renderAll();
+                Cap.toast("Added " + added + " new songs");
+              }
+            }
+          } catch (_) {}
+        }
+      } else {
+        // First run or empty library — show grant-permission CTA
         grantBtn.hidden = false;
         document.querySelector(".boot-loader").style.display = "none";
-        return;
       }
+    } else {
+      // Web preview — no permission needed
+      enterApp();
     }
-    enterApp();
   }
 
   function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -106,19 +126,76 @@
       }
     }
 
-    grantBtn.textContent = "Scanning...";
-    // Use the Capacitor Filesystem plugin's Directory enum + path
+    grantBtn.textContent = "Scanning all music...";
+    await scanLibraryNative();
+    renderAll();
+    enterApp();
+  }
+
+  /**
+   * Scan all audio on the device using the native MediaStore-backed
+   * `Cap.Music.scanAllAudio()` plugin method. This finds songs on:
+   *   - Internal shared storage (/sdcard/Music, /sdcard/Download, etc.)
+   *   - Removable SD card (/storage/XXXX-XXXX/Music, etc.)
+   *   - USB OTG drives
+   * Returns true if any songs were added.
+   */
+  async function scanLibraryNative() {
+    if (!Cap.Music || !Cap.Music.scanAllAudio) {
+      // Fallback to the old Filesystem-based scanner if the native
+      // MediaStore method isn't available.
+      return await scanLibraryFilesystemFallback();
+    }
+    let addedTotal = 0;
+    try {
+      const result = await Cap.Music.scanAllAudio();
+      const songsRaw = (result && result.songs) || [];
+      const count = result && typeof result.count === "number" ? result.count : songsRaw.length;
+      if (result && result.error === "permission-denied") {
+        Cap.toast("Storage permission denied");
+        return 0;
+      }
+      // Convert content:// URIs to WebView-loadable URLs and pass through
+      // makeSong() so the library gets rich metadata (title/artist/album/duration)
+      // directly from MediaStore.
+      const songs = songsRaw.map(s => {
+        // Make sure each song's URI is converted from content:// → https://localhost/_capacitor_content_/...
+        const convertedUri = s.uri ? Cap.convertFileSrc(s.uri) : null;
+        return Library.makeSong(Object.assign({}, s, { uri: convertedUri }));
+      });
+      addedTotal = await Library.addSongs(songs);
+      if (count > 0 && addedTotal === 0) {
+        Cap.toast("Library already up to date (" + count + " songs)");
+      } else if (addedTotal > 0) {
+        Cap.toast("Found " + addedTotal + " songs (SD card + phone)");
+      } else {
+        Cap.toast("No music found on device");
+      }
+    } catch (e) {
+      console.error("scanAllAudio failed", e);
+      Cap.toast("Scan failed — trying fallback");
+      addedTotal = await scanLibraryFilesystemFallback();
+    }
+    return addedTotal;
+  }
+
+  /** Fallback: scan common paths via the Capacitor Filesystem plugin. */
+  async function scanLibraryFilesystemFallback() {
     const Filesystem = Cap.Filesystem;
     const Directory = (Filesystem && Filesystem.Directory) || {};
-    // Common locations: ExternalStorage root + "Music", "Downloads/Music", "Download/Music"
     const dirs = [
+      // Internal shared storage (primary)
       { dir: Directory.ExternalStorage, path: "Music" },
-      { dir: Directory.ExternalStorage, path: "Download/Music" },
-      { dir: Directory.ExternalStorage, path: "Downloads/Music" },
+      { dir: Directory.ExternalStorage, path: "Download" },
       { dir: Directory.ExternalStorage, path: "Downloads" },
-      { dir: Directory.ExternalStorage, path: "Audiobooks" }
+      { dir: Directory.ExternalStorage, path: "Audiobooks" },
+      { dir: Directory.ExternalStorage, path: "Podcasts" },
+      { dir: Directory.ExternalStorage, path: "Recordings" },
+      { dir: Directory.ExternalStorage, path: "DCIM" },
+      // Application-specific external storage
+      { dir: Directory.External, path: "Music" },
+      { dir: Directory.External, path: "Download" }
     ];
-
     let addedTotal = 0;
     for (const d of dirs) {
       if (!d.dir) continue;
@@ -129,16 +206,12 @@
           addedTotal += added;
         }
       } catch (e) {
-        console.warn("scan failed for", d, e);
+        // permission denied or path missing — skip
       }
     }
-    if (addedTotal === 0) {
-      Cap.toast("No music found. Place audio files in your Music folder and try again.");
-    } else {
-      Cap.toast("Found " + addedTotal + " songs");
-    }
-    renderAll();
-    enterApp();
+    if (addedTotal > 0) Cap.toast("Found " + addedTotal + " songs (fallback scan)");
+    else Cap.toast("No music found in common folders");
+    return addedTotal;
   }
 
   async function rescan() {
@@ -157,26 +230,11 @@
       input.click();
       return;
     }
-    Cap.toast("Scanning for music...");
-    const Filesystem = Cap.Filesystem;
-    const Directory = (Filesystem && Filesystem.Directory) || {};
-    const dirs = [
-      { dir: Directory.ExternalStorage, path: "Music" },
-      { dir: Directory.ExternalStorage, path: "Download/Music" },
-      { dir: Directory.ExternalStorage, path: "Downloads/Music" },
-      { dir: Directory.ExternalStorage, path: "Downloads" }
-    ];
-    let addedTotal = 0;
-    for (const d of dirs) {
-      if (!d.dir) continue;
-      try {
-        const songs = await Library.scanPathWithFilesystem({ directory: d.dir, path: d.path });
-        const added = await Library.addSongs(songs);
-        addedTotal += added;
-      } catch (e) {}
-    }
+    Cap.toast("Scanning all storage (SD card + phone)...");
+    const added = await scanLibraryNative();
     renderAll();
-    Cap.toast(addedTotal ? "Added " + addedTotal + " new songs" : "Library up to date");
+    if (added > 0) Cap.toast("Added " + added + " new songs");
+    else Cap.toast("Library is up to date");
   }
 
   // -------------- Render --------------
